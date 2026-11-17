@@ -3,15 +3,16 @@ class BatteryAutomationsController < ApplicationController
   before_action :load_setting
 
   def show
-    @events   = BatteryEvent.order(created_at: :desc).limit(15)
-    @latest   = BatteryReading.order(:created_at).last
-    @readings = BatteryReading.where("created_at > ?", 24.hours.ago).order(:created_at).pluck(:created_at, :level)
+    @events      = BatteryEvent.order(created_at: :desc).limit(15)
+    @latest      = BatteryReading.order(:created_at).last
+    @readings    = BatteryReading.where("created_at > ?", 24.hours.ago).order(:created_at).pluck(:created_at, :level)
+    @calibration = BatteryAutomation::Calibration.call(@setting)
   end
 
   def update
     permitted = params.require(:battery_automation_setting).permit(
       :start_charging_at, :stop_charging_at, :monitoring_interval,
-      :confirmations_required, :battery_scale_max, :use_charge_full
+      :confirmations_required, :battery_scale_max, :use_charge_full, :step_percents
     )
     if @setting.update(permitted)
       BatteryAutomation::Broadcaster.call

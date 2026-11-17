@@ -31,6 +31,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_18_002000) do
     t.datetime "updated_at", null: false
     t.integer "battery_scale_max", default: 4, null: false
     t.boolean "use_charge_full", default: true, null: false
+    t.string "step_percents", default: "0,25,50,75,100", null: false
   end
 
   create_table "battery_events", force: :cascade do |t|

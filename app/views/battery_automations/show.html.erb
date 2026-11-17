@@ -45,9 +45,14 @@
           <small>How the router reports its battery</small>
         </div>
         <div>
+          <%= f.label :step_percents, "Percent for each step" %>
+          <%= f.text_field :step_percents %>
+          <small>Step 0 to 4, e.g. 0,25,50,75,100. Used with 4 steps.</small>
+        </div>
+        <div>
           <%= f.label :start_charging_at, "Start charging at (%)" %>
           <%= f.number_field :start_charging_at, min: 0, max: 100 %>
-          <small>25 = one bar left on a 4-step battery</small>
+          <small>Match one of the step percents</small>
         </div>
         <div>
           <%= f.label :stop_charging_at, "Stop charging at (%)" %>
@@ -70,6 +75,13 @@
       <div class="form-foot"><%= f.submit "Save settings" %></div>
     <% end %>
   </section>
+
+  <% if @calibration.any? %>
+    <section class="card wide">
+      <h2>Step calibration</h2>
+      <%= render "battery_automations/calibration", rows: @calibration %>
+    </section>
+  <% end %>
 
   <div class="grid">
     <section class="card">

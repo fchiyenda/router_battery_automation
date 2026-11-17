@@ -1,0 +1,15 @@
+<% fmt = ->(m) { m ? "#{m.round} min" : "no data yet" } %>
+<dl class="rows">
+  <% rows.each do |r| %>
+    <div>
+      <dt>Step <%= r.step %> → <%= r.percent %>%</dt>
+      <dd>
+        <%= r.count %> readings ·
+        charging <%= fmt.call(r.charging_min) %> ·
+        on battery <%= fmt.call(r.battery_min) %>
+        <%= "· full flag #{r.full_flag}×" if r.full_flag.positive? %>
+      </dd>
+    </div>
+  <% end %>
+</dl>
+<p class="empty" style="margin-top:10px">Last 7 days. Times only count steps where the app saw the router enter and leave the step.</p>

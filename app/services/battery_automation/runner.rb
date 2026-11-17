@@ -33,9 +33,12 @@ module BatteryAutomation
       s.update!(last_battery_level: reading.level, charging_active: plug_on, last_checked_at: Time.current, error_message: nil)
       return unless s.enabled
 
+      # The router's "full" flag only counts while the battery is above the start threshold.
+      full_signal = s.use_charge_full && reading.charge_full && reading.level > s.start_charging_at
+
       d = Decider.call(level: reading.level, plug_on: plug_on, start_at: s.start_charging_at,
                        stop_at: s.stop_charging_at, required: s.confirmations_required,
-                       low_streak: s.low_streak, full_streak: s.full_streak)
+                       low_streak: s.low_streak, full_streak: s.full_streak, full_signal: full_signal)
       s.update!(low_streak: d.low_streak, full_streak: d.full_streak)
       return if d.action == :none
 

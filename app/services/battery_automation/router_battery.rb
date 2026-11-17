@@ -2,7 +2,7 @@ module BatteryAutomation
   # ADAPTER around the router client. Converts the router's step value to percent.
   class RouterBattery
     class Invalid < StandardError; end
-    Result = Struct.new(:level, :raw)
+    Result = Struct.new(:level, :raw, :charge_full)
 
     def self.fetch(steps: BatteryAutomationSetting.instance.battery_scale_max)
       data = fetch_raw
@@ -12,7 +12,7 @@ module BatteryAutomation
 
       percent = (v.to_i * 100.0 / steps).round
       raw = data.slice("battery_value", "battery_charge_full", "battery_charging", "charge_type", "power_exist")
-      Result.new(percent, raw)
+      Result.new(percent, raw, data["battery_charge_full"].to_s.strip == "1")
     end
 
     # Must return a Hash and RAISE on timeout/HTTP error. Never return 0 on failure.

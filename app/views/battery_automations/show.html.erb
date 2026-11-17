@@ -49,6 +49,7 @@
           <div><dt>Last switch</dt><dd><%= @setting.last_switch_action ? "#{@setting.last_switch_action} · #{time_ago_in_words(@setting.last_switch_at)} ago" : "none yet" %></dd></div>
           <div><dt>Start threshold</dt><dd><%= @setting.start_charging_at %>%</dd></div>
           <div><dt>Stop threshold</dt><dd><%= @setting.stop_charging_at %>%</dd></div>
+          <div><dt>Router "full" flag</dt><dd><%= @setting.use_charge_full ? "also used to stop" : "not used" %></dd></div>
           <div><dt>Interval</dt><dd><%= @setting.monitoring_interval %> s</dd></div>
         </dl>
       </section>
@@ -85,6 +86,11 @@
         <div>
           <%= f.label :confirmations_required, "Readings to confirm" %>
           <%= f.number_field :confirmations_required, min: 1, max: 5 %>
+        </div>
+        <div>
+          <%= f.label :use_charge_full, "Also stop when router says full" %>
+          <%= f.check_box :use_charge_full %>
+          <small>Uses the router's battery_charge_full flag</small>
         </div>
       </div>
       <div class="form-foot"><%= f.submit "Save settings" %></div>

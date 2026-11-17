@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_11_18_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_18_002000) do
   create_table "battery_automation_settings", force: :cascade do |t|
     t.boolean "enabled", default: true, null: false
     t.integer "start_charging_at", default: 25, null: false
@@ -30,6 +30,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_11_18_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "battery_scale_max", default: 4, null: false
+    t.boolean "use_charge_full", default: true, null: false
   end
 
   create_table "battery_events", force: :cascade do |t|

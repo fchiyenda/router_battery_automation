@@ -9,7 +9,10 @@ class BatteryAutomationsController < ApplicationController
   end
 
   def update
-    permitted = params.require(:battery_automation_setting).permit(:start_charging_at, :stop_charging_at, :monitoring_interval, :confirmations_required, :battery_scale_max)
+    permitted = params.require(:battery_automation_setting).permit(
+      :start_charging_at, :stop_charging_at, :monitoring_interval,
+      :confirmations_required, :battery_scale_max, :use_charge_full
+    )
     if @setting.update(permitted)
       redirect_to battery_automation_path, notice: "Settings saved"
     else

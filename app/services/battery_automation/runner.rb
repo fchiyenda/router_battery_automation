@@ -1,14 +1,21 @@
+require "timeout"
+
 module BatteryAutomation
   class Runner
+    HARD_LIMIT = 75 # seconds for one whole check
+
     def self.call = new.call
 
     def call
       s = BatteryAutomationSetting.instance
       return unless s.acquire_lock!
       begin
-        run(s)
+        Timeout.timeout(HARD_LIMIT) { run(s) }
+      rescue Timeout::Error
+        fail!(s, :timeout, "Check timed out after #{HARD_LIMIT}s")
       ensure
         s.release_lock!
+        Broadcaster.call
       end
     end
 
@@ -21,16 +28,18 @@ module BatteryAutomation
         return fail!(s, :router_error, "Router: #{e.message}") # never switches on a failed read
       end
 
+      BatteryReading.create!(level: reading.level, raw: reading.raw, created_at: Time.current)
+      s.update!(last_battery_level: reading.level, last_checked_at: Time.current)
+      Broadcaster.call # show the new level immediately, before the plug is contacted
+
       plug_on = begin
         Plug.on?
       rescue StandardError => e
-        BatteryReading.create!(level: reading.level, raw: reading.raw, created_at: Time.current)
-        s.update!(last_battery_level: reading.level)
         return fail!(s, :plug_error, "Plug: #{e.message}")
       end
 
-      BatteryReading.create!(level: reading.level, plug_on: plug_on, raw: reading.raw, created_at: Time.current)
-      s.update!(last_battery_level: reading.level, charging_active: plug_on, last_checked_at: Time.current, error_message: nil)
+      BatteryReading.order(:created_at).last.update!(plug_on: plug_on)
+      s.update!(charging_active: plug_on, error_message: nil)
       return unless s.enabled
 
       # The router's "full" flag only counts while the battery is above the start threshold.

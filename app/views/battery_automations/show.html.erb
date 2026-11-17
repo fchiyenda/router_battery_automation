@@ -1,59 +1,33 @@
-<% level = @setting.last_battery_level %>
-<% steps = @setting.battery_scale_max %>
-<% raw_step = @latest&.raw&.dig("battery_value") %>
-<% tone  = level.nil? ? "unknown" : (level <= 25 ? "low" : (level < 50 ? "mid" : "good")) %>
+<%= turbo_stream_from "battery_automation" %>
 
 <main class="container">
   <header class="page-head">
     <h1>Router battery monitor</h1>
-    <span class="pill <%= @setting.enabled ? 'pill-ok' : 'pill-off' %>">
-      Automation <%= @setting.enabled ? "on" : "off" %>
-    </span>
+    <%= render "battery_automations/automation", setting: @setting %>
   </header>
 
   <% if flash[:notice] %><div class="banner banner-ok"><%= flash[:notice] %></div><% end %>
   <% if flash[:alert] %><div class="banner banner-bad"><%= flash[:alert] %></div><% end %>
 
-  <div id="live-top">
-    <% if @setting.error_message.present? %>
-      <div class="banner banner-bad">⚠ <%= @setting.error_message %></div>
-    <% end %>
+  <%= render "battery_automations/error", setting: @setting %>
 
-    <div class="grid">
-      <section class="card tone-<%= tone %>">
-        <h2>Battery</h2>
-        <div class="level"><%= level || "—" %><small><%= "%" if level %></small></div>
-        <div class="gauge" style="--level: <%= level.to_i %>"><span></span></div>
-        <% if raw_step && steps < 100 %>
-          <p class="empty" style="margin-top:10px">Router reports step <%= raw_step %> of <%= steps %></p>
-        <% end %>
-      </section>
+  <div class="grid">
+    <%= render "battery_automations/battery", setting: @setting, latest: @latest %>
 
-      <section class="card">
-        <h2>Smart plug</h2>
-        <span class="pill <%= @setting.charging_active ? 'pill-ok' : 'pill-off' %>">
-          <%= @setting.charging_active ? "ON · charging" : "OFF" %>
-        </span>
-        <div class="actions">
-          <%= button_to "Plug ON", plug_on_battery_automation_path, method: :post, class: "btn btn-on" %>
-          <%= button_to "Plug OFF", plug_off_battery_automation_path, method: :post, class: "btn btn-off" %>
-          <%= button_to (@setting.enabled ? "Disable automation" : "Enable automation"),
-                        toggle_battery_automation_path, method: :post, class: "btn" %>
-        </div>
-      </section>
+    <section class="card">
+      <h2>Smart plug</h2>
+      <%= render "battery_automations/plug_state", setting: @setting %>
+      <div class="actions">
+        <%= button_to "Plug ON", plug_on_battery_automation_path, method: :post, class: "btn btn-on" %>
+        <%= button_to "Plug OFF", plug_off_battery_automation_path, method: :post, class: "btn btn-off" %>
+        <%= button_to "Toggle automation", toggle_battery_automation_path, method: :post, class: "btn" %>
+      </div>
+    </section>
 
-      <section class="card">
-        <h2>Status</h2>
-        <dl class="rows">
-          <div><dt>Last check</dt><dd><%= @setting.last_checked_at ? "#{time_ago_in_words(@setting.last_checked_at)} ago" : "never" %></dd></div>
-          <div><dt>Last switch</dt><dd><%= @setting.last_switch_action ? "#{@setting.last_switch_action} · #{time_ago_in_words(@setting.last_switch_at)} ago" : "none yet" %></dd></div>
-          <div><dt>Start threshold</dt><dd><%= @setting.start_charging_at %>%</dd></div>
-          <div><dt>Stop threshold</dt><dd><%= @setting.stop_charging_at %>%</dd></div>
-          <div><dt>Router "full" flag</dt><dd><%= @setting.use_charge_full ? "also used to stop" : "not used" %></dd></div>
-          <div><dt>Interval</dt><dd><%= @setting.monitoring_interval %> s</dd></div>
-        </dl>
-      </section>
-    </div>
+    <section class="card">
+      <h2>Status</h2>
+      <%= render "battery_automations/status", setting: @setting %>
+    </section>
   </div>
 
   <section class="card wide">
@@ -97,55 +71,30 @@
     <% end %>
   </section>
 
-  <div id="live-bottom">
-    <div class="grid">
-      <section class="card">
-        <h2>Router fields (latest reading)</h2>
-        <% if @latest&.raw.present? %>
-          <dl class="rows">
-            <% @latest.raw.each do |key, value| %>
-              <div><dt><%= key %></dt><dd><%= value.to_s.presence || "(empty)" %></dd></div>
-            <% end %>
-          </dl>
-        <% else %>
-          <p class="empty">No readings yet.</p>
-        <% end %>
-      </section>
+  <div class="grid">
+    <section class="card">
+      <h2>Router fields (latest reading)</h2>
+      <%= render "battery_automations/fields", latest: @latest %>
+    </section>
 
-      <section class="card">
-        <h2>Recent events</h2>
-        <% if @events.any? %>
-          <ul class="events">
-            <% @events.each do |e| %>
-              <li>
-                <time><%= e.created_at.strftime("%b %-d, %H:%M") %></time>
-                <span>
-                  <strong><%= e.kind.humanize %></strong>
-                  <%= "(#{e.battery_level}%)" if e.battery_level %>
-                  <%= e.message %>
-                </span>
-              </li>
-            <% end %>
-          </ul>
-        <% else %>
-          <p class="empty">Nothing logged yet.</p>
-        <% end %>
-      </section>
-    </div>
+    <section class="card">
+      <h2>Recent events</h2>
+      <%= render "battery_automations/events", events: @events %>
+    </section>
   </div>
 </main>
 
-<script type="application/json" id="chart-data"><%= raw @readings.map { |t, l| { x: t.iso8601, y: l } }.to_json %></script>
+<div id="chart-feed" hidden><%= raw @readings.map { |t, l| { x: t.iso8601, y: l } }.to_json %></div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script>
   (function () {
-    const REFRESH_MS = 15000;
-    const STEPPED = <%= steps < 100 %>;
+    const STEPPED = <%= @setting.battery_scale_max < 100 %>;
+    const feed = document.getElementById("chart-feed");
 
-    const readRows = (root) => JSON.parse(root.getElementById("chart-data").textContent);
+    const readRows = () => { try { return JSON.parse(feed.textContent); } catch (e) { return null; } };
     const labelsOf = (rows) => rows.map(r => new Date(r.x).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
 
-    const rows = readRows(document);
+    const rows = readRows() || [];
     const chart = new Chart(document.getElementById("chart"), {
       type: "line",
       data: {
@@ -161,29 +110,27 @@
       }
     });
 
-    async function refresh() {
-      if (document.hidden) return;                                   // tab not visible
-      if (document.querySelector("#settings :focus")) return;        // user is editing settings
-      try {
-        const res = await fetch(window.location.pathname, { headers: { Accept: "text/html" }, cache: "no-store", credentials: "same-origin" });
-        if (!res.ok) return;
-        const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    // The server pushes new chart data into #chart-feed over the WebSocket.
+    new MutationObserver(() => {
+      const r = readRows();
+      if (!r) return;
+      chart.data.labels = labelsOf(r);
+      chart.data.datasets[0].data = r.map(x => x.y);
+      chart.update("none");
+    }).observe(feed, { childList: true, characterData: true, subtree: true });
 
-        ["live-top", "live-bottom"].forEach(id => {
-          const fresh = doc.getElementById(id), current = document.getElementById(id);
-          if (fresh && current) current.innerHTML = fresh.innerHTML;
-        });
-
-        const newRows = readRows(doc);
-        chart.data.labels = labelsOf(newRows);
-        chart.data.datasets[0].data = newRows.map(r => r.y);
-        chart.update("none");
-      } catch (e) {
-        // network hiccup: keep showing the last data and try again next time
-      }
-    }
-
-    setInterval(refresh, REFRESH_MS);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+    // "5 min ago" labels keep ticking between pushes.
+    const ago = (iso) => {
+      const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+      if (s < 60) return "just now";
+      if (s < 3600) return Math.floor(s / 60) + " min ago";
+      if (s < 86400) return Math.floor(s / 3600) + " h ago";
+      return Math.floor(s / 86400) + " d ago";
+    };
+    const tick = () => document.querySelectorAll("[data-ago]").forEach(el => { el.textContent = ago(el.dataset.ago); });
+    clearInterval(window.__batteryTick);
+    window.__batteryTick = setInterval(tick, 5000);
+    document.addEventListener("turbo:before-stream-render", () => setTimeout(tick, 0));
+    tick();
   })();
 </script>

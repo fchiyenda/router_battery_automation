@@ -1,0 +1,11 @@
+<div id="live-fields">
+  <% if latest&.raw.present? %>
+    <dl class="rows">
+      <% latest.raw.each do |key, value| %>
+        <div><dt><%= key %></dt><dd><%= value.to_s.presence || "(empty)" %></dd></div>
+      <% end %>
+    </dl>
+  <% else %>
+    <p class="empty">No readings yet.</p>
+  <% end %>
+</div>

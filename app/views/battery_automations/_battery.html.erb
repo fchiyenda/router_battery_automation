@@ -1,0 +1,12 @@
+<% level    = setting.last_battery_level %>
+<% steps    = setting.battery_scale_max %>
+<% raw_step = latest&.raw&.dig("battery_value") %>
+<% tone     = level.nil? ? "unknown" : (level <= 25 ? "low" : (level < 50 ? "mid" : "good")) %>
+<section id="live-battery" class="card tone-<%= tone %>">
+  <h2>Battery</h2>
+  <div class="level"><%= level || "—" %><small><%= "%" if level %></small></div>
+  <div class="gauge" style="--level: <%= level.to_i %>"><span></span></div>
+  <% if raw_step && steps < 100 %>
+    <p class="empty" style="margin-top:10px">Router reports step <%= raw_step %> of <%= steps %></p>
+  <% end %>
+</section>

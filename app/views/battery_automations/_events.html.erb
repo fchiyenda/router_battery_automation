@@ -1,0 +1,18 @@
+<div id="live-events">
+  <% if events.any? %>
+    <ul class="events">
+      <% events.each do |e| %>
+        <li>
+          <time><%= e.created_at.strftime("%b %-d, %H:%M") %></time>
+          <span>
+            <strong><%= e.kind.humanize %></strong>
+            <%= "(#{e.battery_level}%)" if e.battery_level %>
+            <%= e.message %>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p class="empty">Nothing logged yet.</p>
+  <% end %>
+</div>

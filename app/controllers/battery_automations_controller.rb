@@ -14,15 +14,17 @@ class BatteryAutomationsController < ApplicationController
       :confirmations_required, :battery_scale_max, :use_charge_full
     )
     if @setting.update(permitted)
-      redirect_to battery_automation_path, notice: "Settings saved"
+      BatteryAutomation::Broadcaster.call
+      redirect_to battery_automation_path, notice: "Settings saved", status: :see_other
     else
-      redirect_to battery_automation_path, alert: @setting.errors.full_messages.to_sentence
+      redirect_to battery_automation_path, alert: @setting.errors.full_messages.to_sentence, status: :see_other
     end
   end
 
   def toggle
     @setting.update!(enabled: !@setting.enabled, low_streak: 0, full_streak: 0)
-    redirect_to battery_automation_path, notice: "Automation #{@setting.enabled ? 'enabled' : 'disabled'}"
+    BatteryAutomation::Broadcaster.call
+    redirect_to battery_automation_path, notice: "Automation #{@setting.enabled ? 'enabled' : 'disabled'}", status: :see_other
   end
 
   def plug_on  = manual(true)
@@ -32,12 +34,9 @@ class BatteryAutomationsController < ApplicationController
 
   def load_setting = @setting = BatteryAutomationSetting.instance
 
+  # Returns immediately; the job talks to the plug and the page updates over the socket.
   def manual(on)
-    BatteryAutomation::Plug.set(on)
-    @setting.update!(charging_active: on, last_switch_action: on ? "ON" : "OFF", last_switch_at: Time.current, low_streak: 0, full_streak: 0)
-    BatteryEvent.log(on ? :manual_on : :manual_off, level: @setting.last_battery_level, message: "manual")
-    redirect_to battery_automation_path, notice: "Plug #{on ? 'ON' : 'OFF'}"
-  rescue StandardError => e
-    redirect_to battery_automation_path, alert: "Plug error: #{e.message}"
+    PlugCommandJob.perform_later(on)
+    redirect_to battery_automation_path, notice: "Plug #{on ? 'ON' : 'OFF'} command sent", status: :see_other
   end
 end

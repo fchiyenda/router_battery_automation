@@ -1,8 +1,8 @@
 module BatteryAutomation
-  # ADAPTER: wraps your existing Tuya Local service (192.168.1.186:6668, local key, confirmed protocol version).
+  # ADAPTER around the Tuya Local service (192.168.1.186:6668).
   class Plug
     class Error < StandardError; end
-    RETRIES = 3
+    RETRIES = 2
 
     def self.on? = with_retry { read_state }
 
@@ -23,15 +23,14 @@ module BatteryAutomation
       rescue StandardError => e
         tries += 1
         if tries < RETRIES
-          sleep(tries * 2)
+          sleep 1
           retry
         end
         raise Error, "#{e.class}: #{e.message}"
       end
     end
 
-    # TODO: map to your existing Tuya Local service (switch datapoint, usually "1"). Use short timeouts.
-    def self.read_state = TuyaLocalPlug.new.switch_on?        # => true/false
+    def self.read_state = TuyaLocalPlug.new.switch_on?
     def self.write_state(on) = TuyaLocalPlug.new.set_switch(on)
   end
 end

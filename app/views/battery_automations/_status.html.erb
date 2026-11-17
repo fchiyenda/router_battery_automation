@@ -1,0 +1,22 @@
+<dl id="live-status" class="rows">
+  <div>
+    <dt>Last check</dt>
+    <dd>
+      <% if setting.last_checked_at %>
+        <span data-ago="<%= setting.last_checked_at.iso8601 %>"><%= time_ago_in_words(setting.last_checked_at) %> ago</span>
+      <% else %>never<% end %>
+    </dd>
+  </div>
+  <div>
+    <dt>Last switch</dt>
+    <dd>
+      <% if setting.last_switch_action && setting.last_switch_at %>
+        <%= setting.last_switch_action %> · <span data-ago="<%= setting.last_switch_at.iso8601 %>"><%= time_ago_in_words(setting.last_switch_at) %> ago</span>
+      <% else %>none yet<% end %>
+    </dd>
+  </div>
+  <div><dt>Start threshold</dt><dd><%= setting.start_charging_at %>%</dd></div>
+  <div><dt>Stop threshold</dt><dd><%= setting.stop_charging_at %>%</dd></div>
+  <div><dt>Router "full" flag</dt><dd><%= setting.use_charge_full ? "also used to stop" : "not used" %></dd></div>
+  <div><dt>Interval</dt><dd><%= setting.monitoring_interval %> s</dd></div>
+</dl>

@@ -1,0 +1,1 @@
+class BatteryReading < ApplicationRecord; end

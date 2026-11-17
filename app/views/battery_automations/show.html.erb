@@ -1,0 +1,183 @@
+<% level = @setting.last_battery_level %>
+<% steps = @setting.battery_scale_max %>
+<% raw_step = @latest&.raw&.dig("battery_value") %>
+<% tone  = level.nil? ? "unknown" : (level <= 25 ? "low" : (level < 50 ? "mid" : "good")) %>
+
+<main class="container">
+  <header class="page-head">
+    <h1>Router battery monitor</h1>
+    <span class="pill <%= @setting.enabled ? 'pill-ok' : 'pill-off' %>">
+      Automation <%= @setting.enabled ? "on" : "off" %>
+    </span>
+  </header>
+
+  <% if flash[:notice] %><div class="banner banner-ok"><%= flash[:notice] %></div><% end %>
+  <% if flash[:alert] %><div class="banner banner-bad"><%= flash[:alert] %></div><% end %>
+
+  <div id="live-top">
+    <% if @setting.error_message.present? %>
+      <div class="banner banner-bad">⚠ <%= @setting.error_message %></div>
+    <% end %>
+
+    <div class="grid">
+      <section class="card tone-<%= tone %>">
+        <h2>Battery</h2>
+        <div class="level"><%= level || "—" %><small><%= "%" if level %></small></div>
+        <div class="gauge" style="--level: <%= level.to_i %>"><span></span></div>
+        <% if raw_step && steps < 100 %>
+          <p class="empty" style="margin-top:10px">Router reports step <%= raw_step %> of <%= steps %></p>
+        <% end %>
+      </section>
+
+      <section class="card">
+        <h2>Smart plug</h2>
+        <span class="pill <%= @setting.charging_active ? 'pill-ok' : 'pill-off' %>">
+          <%= @setting.charging_active ? "ON · charging" : "OFF" %>
+        </span>
+        <div class="actions">
+          <%= button_to "Plug ON", plug_on_battery_automation_path, method: :post, class: "btn btn-on" %>
+          <%= button_to "Plug OFF", plug_off_battery_automation_path, method: :post, class: "btn btn-off" %>
+          <%= button_to (@setting.enabled ? "Disable automation" : "Enable automation"),
+                        toggle_battery_automation_path, method: :post, class: "btn" %>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Status</h2>
+        <dl class="rows">
+          <div><dt>Last check</dt><dd><%= @setting.last_checked_at ? "#{time_ago_in_words(@setting.last_checked_at)} ago" : "never" %></dd></div>
+          <div><dt>Last switch</dt><dd><%= @setting.last_switch_action ? "#{@setting.last_switch_action} · #{time_ago_in_words(@setting.last_switch_at)} ago" : "none yet" %></dd></div>
+          <div><dt>Start threshold</dt><dd><%= @setting.start_charging_at %>%</dd></div>
+          <div><dt>Stop threshold</dt><dd><%= @setting.stop_charging_at %>%</dd></div>
+          <div><dt>Interval</dt><dd><%= @setting.monitoring_interval %> s</dd></div>
+        </dl>
+      </section>
+    </div>
+  </div>
+
+  <section class="card wide">
+    <h2>Last 24 hours</h2>
+    <div class="chart-box"><canvas id="chart"></canvas></div>
+  </section>
+
+  <section class="card wide" id="settings">
+    <h2>Settings</h2>
+    <%= form_with model: @setting, url: battery_automation_path, method: :patch, scope: :battery_automation_setting do |f| %>
+      <div class="fields">
+        <div>
+          <%= f.label :battery_scale_max, "Router battery steps" %>
+          <%= f.select :battery_scale_max, [["4 steps (0 to 4)", 4], ["Real percent (0 to 100)", 100]] %>
+          <small>How the router reports its battery</small>
+        </div>
+        <div>
+          <%= f.label :start_charging_at, "Start charging at (%)" %>
+          <%= f.number_field :start_charging_at, min: 0, max: 100 %>
+          <small>25 = one bar left on a 4-step battery</small>
+        </div>
+        <div>
+          <%= f.label :stop_charging_at, "Stop charging at (%)" %>
+          <%= f.number_field :stop_charging_at, min: 1, max: 100 %>
+        </div>
+        <div>
+          <%= f.label :monitoring_interval, "Check every (seconds)" %>
+          <%= f.number_field :monitoring_interval, min: 15 %>
+        </div>
+        <div>
+          <%= f.label :confirmations_required, "Readings to confirm" %>
+          <%= f.number_field :confirmations_required, min: 1, max: 5 %>
+        </div>
+      </div>
+      <div class="form-foot"><%= f.submit "Save settings" %></div>
+    <% end %>
+  </section>
+
+  <div id="live-bottom">
+    <div class="grid">
+      <section class="card">
+        <h2>Router fields (latest reading)</h2>
+        <% if @latest&.raw.present? %>
+          <dl class="rows">
+            <% @latest.raw.each do |key, value| %>
+              <div><dt><%= key %></dt><dd><%= value.to_s.presence || "(empty)" %></dd></div>
+            <% end %>
+          </dl>
+        <% else %>
+          <p class="empty">No readings yet.</p>
+        <% end %>
+      </section>
+
+      <section class="card">
+        <h2>Recent events</h2>
+        <% if @events.any? %>
+          <ul class="events">
+            <% @events.each do |e| %>
+              <li>
+                <time><%= e.created_at.strftime("%b %-d, %H:%M") %></time>
+                <span>
+                  <strong><%= e.kind.humanize %></strong>
+                  <%= "(#{e.battery_level}%)" if e.battery_level %>
+                  <%= e.message %>
+                </span>
+              </li>
+            <% end %>
+          </ul>
+        <% else %>
+          <p class="empty">Nothing logged yet.</p>
+        <% end %>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script type="application/json" id="chart-data"><%= raw @readings.map { |t, l| { x: t.iso8601, y: l } }.to_json %></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script>
+  (function () {
+    const REFRESH_MS = 15000;
+    const STEPPED = <%= steps < 100 %>;
+
+    const readRows = (root) => JSON.parse(root.getElementById("chart-data").textContent);
+    const labelsOf = (rows) => rows.map(r => new Date(r.x).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
+    const rows = readRows(document);
+    const chart = new Chart(document.getElementById("chart"), {
+      type: "line",
+      data: {
+        labels: labelsOf(rows),
+        datasets: [{ label: "Battery %", data: rows.map(r => r.y), borderColor: "#2f9e6e",
+                     backgroundColor: "rgba(47,158,110,.12)", fill: true, pointRadius: 0, tension: 0.25,
+                     stepped: STEPPED }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { min: 0, max: 100, ticks: { stepSize: 25 } }, x: { ticks: { maxTicksLimit: 8 } } }
+      }
+    });
+
+    async function refresh() {
+      if (document.hidden) return;                                   // tab not visible
+      if (document.querySelector("#settings :focus")) return;        // user is editing settings
+      try {
+        const res = await fetch(window.location.pathname, { headers: { Accept: "text/html" }, cache: "no-store", credentials: "same-origin" });
+        if (!res.ok) return;
+        const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+
+        ["live-top", "live-bottom"].forEach(id => {
+          const fresh = doc.getElementById(id), current = document.getElementById(id);
+          if (fresh && current) current.innerHTML = fresh.innerHTML;
+        });
+
+        const newRows = readRows(doc);
+        chart.data.labels = labelsOf(newRows);
+        chart.data.datasets[0].data = newRows.map(r => r.y);
+        chart.update("none");
+      } catch (e) {
+        // network hiccup: keep showing the last data and try again next time
+      }
+    }
+
+    setInterval(refresh, REFRESH_MS);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  })();
+</script>
